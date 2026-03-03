@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NanoSwitch - Control de Masa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@700&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains+Mono', monospace; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+        
+        .controller-bg { background-color: #455460; border-color: #333f48; }
+        .screen-border { border-color: #2d373f; }
+        .button-shadow { box-shadow: inset 0 4px 10px rgba(0,0,0,0.6), 0 8px 15px rgba(0,0,0,0.4); }
+        
+        /* Animaciones */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-slate-300 min-h-screen flex items-center justify-center p-4">
+
+    <!-- CONTENEDOR PRINCIPAL (EL MANDO) -->
+    <div class="relative w-full max-w-5xl rounded-[4rem] p-4 md:p-12 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] flex flex-col items-center border-[4px] controller-bg">
+        
+        <!-- Detalles estéticos superiores -->
+        <div class="absolute -top-6 left-1/4 w-20 h-8 bg-[#333f48] rounded-t-2xl shadow-lg"></div>
+        <div class="absolute -top-6 right-1/4 w-20 h-8 bg-[#333f48] rounded-t-2xl shadow-lg"></div>
+
+        <div class="w-full flex flex-col md:flex-row items-stretch gap-8">
+            
+            <!-- LADO IZQUIERDO: MINIMIZAR -->
+            <div class="flex-none flex flex-col items-center justify-center gap-6 px-4">
+                <div class="text-white/20 uppercase text-[10px] font-bold tracking-widest mb-2">Nano Zoom</div>
+                <button id="btn-minimize" onclick="handleAction('minimize')" class="w-24 h-24 rounded-full bg-[#333f48] button-shadow transition-all flex items-center justify-center group opacity-50 cursor-not-allowed active:translate-y-1">
+                    <div class="w-16 h-16 rounded-full bg-[#455460] border-2 border-slate-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-minimize text-3xl text-slate-600 transition-colors" id="icon-minimize"></i>
+                    </div>
+                </button>
+                <span class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Minimizar</span>
+                
+                <button id="btn-add" onclick="toggleAddView(true)" class="mt-8 w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center text-white transition-all shadow-[0_4px_0_rgb(30,41,59)] opacity-30 cursor-not-allowed hover:bg-slate-700 active:translate-y-1 active:shadow-none">
+                    <i class="fa-solid fa-plus text-xl"></i>
+                </button>
+            </div>
+
+            <!-- PANTALLA CENTRAL -->
+            <div class="flex-1 bg-black rounded-[2.5rem] p-3 shadow-inner border-[12px] screen-border relative overflow-hidden aspect-[16/10] min-h-[500px]">
+                <div id="screen" class="w-full h-full rounded-2xl flex flex-col overflow-hidden relative transition-all duration-700 bg-black">
+                    
+                    <!-- Contenido cuando está ON (Oculto por defecto) -->
+                    <div id="screen-content" class="hidden h-full flex flex-col animate-fade-in">
+                        <div class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between flex-none z-10">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-bolt text-slate-800 text-sm"></i>
+                                <span class="font-bold text-sm tracking-tight text-slate-800">
+                                    Nano<span style="color: #4783B4">Switch</span>
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">En línea</span>
+                            </div>
+                        </div>
+
+                        <div id="objects-grid" class="flex-1 overflow-y-auto custom-scrollbar p-6 bg-slate-50/50 grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
+                            <!-- Los objetos se insertarán aquí dinámicamente -->
+                        </div>
+
+                        <div id="status-bar" class="bg-slate-900 text-white px-6 py-3 flex items-center justify-between text-[10px] font-bold tracking-widest uppercase flex-none">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-layer-group text-cyan-400"></i>
+                                Focus: <span id="focus-name" class="text-white">---</span>
+                            </div>
+                            <button onclick="confirmDelete()" class="text-red-400 hover:text-red-300 transition-colors flex items-center gap-1.5">
+                                <i class="fa-solid fa-trash-can"></i> ELIMINAR
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Pantalla OFF (Logo estático) -->
+                    <div id="screen-off" class="w-full h-full flex flex-col items-center justify-center relative">
+                        <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none"></div>
+                        <i class="fa-solid fa-bolt text-5xl text-slate-800 opacity-10"></i>
+                    </div>
+
+                    <!-- Vista Añadir Objeto -->
+                    <div id="add-view" class="hidden absolute inset-0 bg-white z-20 flex flex-col animate-slide-up">
+                        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-none bg-slate-50">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white">
+                                    <i class="fa-solid fa-plus"></i>
+                                </div>
+                                <h2 class="font-bold text-slate-800 text-sm tracking-tight">Escáner Molecular</h2>
+                            </div>
+                            <button onclick="toggleAddView(false)" class="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                                <i class="fa-solid fa-xmark text-lg"></i>
+                            </button>
+                        </div>
+                        <div class="flex-1 flex flex-col p-6 overflow-hidden">
+                            <div class="grid grid-cols-2 gap-4 mb-6 flex-none">
+                                <div>
+                                    <label class="text-[9px] font-bold text-slate-400 uppercase mb-1.5 block">Identificador</label>
+                                    <input type="text" id="new-name" placeholder="Nombre..." class="w-full bg-slate-100 rounded-xl px-4 py-3 text-xs font-semibold outline-none focus:ring-2 ring-slate-300 border border-slate-200">
+                                </div>
+                                <div>
+                                    <label class="text-[9px] font-bold text-slate-400 uppercase mb-1.5 block">Masa (KG)</label>
+                                    <input type="number" id="new-mass" step="0.1" placeholder="0.00" class="w-full bg-slate-100 rounded-xl px-4 py-3 text-xs font-semibold outline-none focus:ring-2 ring-slate-300 border border-slate-200">
+                                </div>
+                            </div>
+                            <div id="emoji-grid" class="flex-1 overflow-y-auto custom-scrollbar bg-slate-100 rounded-xl p-3 grid grid-cols-6 gap-2 border border-slate-200 mb-6">
+                                <!-- Emojis dinámicos -->
+                            </div>
+                            <button onclick="addObject()" class="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl flex items-center justify-center gap-2 text-xs uppercase tracking-widest">
+                                <i class="fa-solid fa-check"></i> Añadir Objeto
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Modales de Confirmación -->
+                    <div id="modal-confirm" class="hidden absolute inset-0 bg-slate-900/60 backdrop-blur-[4px] z-30 flex items-center justify-center p-4">
+                        <div class="bg-white w-full max-w-[300px] rounded-[2.5rem] p-8 shadow-2xl text-center">
+                            <div id="modal-icon-container" class="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 mx-auto">
+                                <i id="modal-icon" class="fa-solid text-3xl"></i>
+                            </div>
+                            <h3 id="modal-title" class="font-bold text-slate-800 text-base mb-2">Título</h3>
+                            <p id="modal-desc" class="text-[11px] text-slate-500 mb-8 leading-relaxed">Descripción</p>
+                            <div class="flex flex-col gap-2">
+                                <button id="modal-primary-btn" class="w-full text-white py-3.5 rounded-2xl font-bold text-xs shadow-lg">Confirmar</button>
+                                <button onclick="closeModal()" class="w-full bg-slate-100 text-slate-500 py-3.5 rounded-2xl font-bold text-xs">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- LADO DERECHO: RESTAURAR Y POWER -->
+            <div class="flex-none flex flex-col items-center justify-center gap-6 px-4">
+                <div class="text-white/20 uppercase text-[10px] font-bold tracking-widest mb-2">Mega Scale</div>
+                <button id="btn-maximize" onclick="handleAction('maximize')" class="w-24 h-24 rounded-full bg-[#333f48] button-shadow transition-all flex items-center justify-center group opacity-50 cursor-not-allowed active:translate-y-1">
+                    <div class="w-16 h-16 rounded-full bg-[#455460] border-2 border-slate-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-maximize text-3xl text-slate-600 transition-colors" id="icon-maximize"></i>
+                    </div>
+                </button>
+                <span class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Restaurar</span>
+
+                <!-- BOTÓN POWER (MATE, SIN BRILLO) -->
+                <div class="mt-8 flex flex-col items-center gap-2">
+                    <button id="power-button" onclick="togglePower()" class="w-16 h-16 rounded-full border-[2px] bg-[#1a2126] border-black/40 flex items-center justify-center transition-all duration-300 relative active:scale-95 shadow-[0_6px_10px_rgba(0,0,0,0.4)]">
+                        <i class="fa-solid fa-power-off text-2xl text-white/20 transition-colors duration-300" id="power-icon"></i>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Luces estéticas inferiores -->
+        <div class="mt-12 flex gap-4">
+            <div class="indicator w-2 h-2 rounded-full bg-black/30 shadow-inner transition-colors duration-1000"></div>
+            <div class="indicator w-2 h-2 rounded-full bg-black/30 shadow-inner transition-colors duration-1000"></div>
+            <div class="indicator w-2 h-2 rounded-full bg-black/30 shadow-inner transition-colors duration-1000"></div>
+            <div class="indicator w-2 h-2 rounded-full bg-black/30 shadow-inner transition-colors duration-1000"></div>
+            <div class="indicator w-2 h-2 rounded-full bg-black/30 shadow-inner transition-colors duration-1000"></div>
+            <div class="indicator w-2 h-2 rounded-full bg-black/30 shadow-inner transition-colors duration-1000"></div>
+            <div class="indicator w-2 h-2 rounded-full bg-black/30 shadow-inner transition-colors duration-1000"></div>
+            <div class="indicator w-2 h-2 rounded-full bg-black/30 shadow-inner transition-colors duration-1000"></div>
+        </div>
+    </div>
+
+    <script>
+        // ESTADO GLOBAL
+        let isOn = false;
+        let selectedId = 1;
+        let currentIcon = '📦';
+        const MASS_REDUCTION_FACTOR = 0.001;
+
+        let objects = [
+            { id: 1, name: "Bicicleta de Montaña", isMinimized: true, originalMass: 14.5, icon: "🚲" },
+            { id: 2, name: "Sofá de Cuero", isMinimized: true, originalMass: 85, icon: "🛋️" },
+            { id: 3, name: "Guitarra Eléctrica", isMinimized: false, originalMass: 3.8, icon: "🎸" },
+            { id: 4, name: "Coche Deportivo", isMinimized: true, originalMass: 1500, icon: "🚗" },
+        ];
+
+        const EMOJI_LIBRARY = ['🚗','🚕','🚙','🚌','🚎','🏎️','🏍️','🚲','🛴','🛺','🚐','🛻','🚚','🚛','🚜',
+                '🚔','🚍','🚘','🚖','🚡','🚠','🚟','🚆','✈️','🚁','🚀','🛸','🚢','⛴️','🛥️','🚤','🛳️','⛵',
+                '🏠','🛋️','🪑','🛏️','🚪','🪟','🚽','🚿','🛁','🛒',
+                '📺','💻','🖥️','🖨️','📷','📸','📹','📽️','🎥','📻','📱','☎️','📞',
+                '🎹','🎸','🥁','🎷','🎺','🎻','🎼','🎧','🎤','🎬','🎨','🎭','🎪','🎮','🎯','🎳','🎲','♟️',
+                '⚽','🏀','🏈','⚾','🎾','🏐','🏉','🥏','🎱','🏓','🏸','🏒','🏑','🏏','🥅','⛳','🥊','🥋','🎽',
+                '🛹','🛼','🛷','⛸️','🥌','🎿','🏂','🪂','🏆','🥇','🥈','🥉','🏅','🎖️',
+                '🧳','🎒','👓','🕶️','🥽','🥼','🦺','👔','👕','👖','🧥','👗','👘','🩱',
+                '👛','👜','🛍️','👞','👟','🥾','👠','👡','👢','👑','🎩','🎓','🪖',
+                '🔋','💡','🔨','🛠️','⚙️','⚖️','🔭','🧪','🖱️','🕹️'
+    ];
+
+        // FUNCIONES DE CONTROL
+        function togglePower() {
+            isOn = !isOn;
+            const screen = document.getElementById('screen');
+            const screenOff = document.getElementById('screen-off');
+            const screenContent = document.getElementById('screen-content');
+            const powerIcon = document.getElementById('power-icon');
+            const powerBtn = document.getElementById('power-button');
+            const indicators = document.querySelectorAll('.indicator');
+
+            if (isOn) {
+                screen.classList.replace('bg-black', 'bg-[#F8FAFC]');
+                screenOff.classList.add('hidden');
+                screenContent.classList.remove('hidden');
+                powerIcon.classList.replace('text-white/20', 'text-white');
+                powerBtn.classList.replace('bg-[#1a2126]', 'bg-[#2a343c]');
+                powerBtn.classList.replace('border-black/40', 'border-[#333f48]');
+                
+                // Activar botones laterales
+                document.getElementById('btn-minimize').classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-maximize').classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-add').classList.remove('opacity-30', 'cursor-not-allowed');
+                document.getElementById('icon-minimize').classList.replace('text-slate-600', 'text-cyan-400');
+                document.getElementById('icon-maximize').classList.replace('text-slate-600', 'text-green-400');
+                
+                indicators.forEach(i => i.classList.replace('bg-black/30', 'bg-cyan-500/30'));
+                renderObjects();
+            } else {
+                screen.classList.replace('bg-[#F8FAFC]', 'bg-black');
+                screenOff.classList.remove('hidden');
+                screenContent.classList.add('hidden');
+                powerIcon.classList.replace('text-white', 'text-white/20');
+                powerBtn.classList.replace('bg-[#2a343c]', 'bg-[#1a2126]');
+                powerBtn.classList.replace('border-[#333f48]', 'border-black/40');
+                
+                // Desactivar botones
+                document.getElementById('btn-minimize').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-maximize').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-add').classList.add('opacity-30', 'cursor-not-allowed');
+                document.getElementById('icon-minimize').classList.replace('text-cyan-400', 'text-slate-600');
+                document.getElementById('icon-maximize').classList.replace('text-green-400', 'text-slate-600');
+                
+                indicators.forEach(i => i.classList.replace('bg-cyan-500/30', 'bg-black/30'));
+                toggleAddView(false);
+                closeModal();
+            }
+        }
+
+        function renderObjects() {
+            const grid = document.getElementById('objects-grid');
+            grid.innerHTML = '';
+            
+            objects.forEach(obj => {
+                const isSelected = obj.id === selectedId;
+                const currentMass = obj.isMinimized ? obj.originalMass * MASS_REDUCTION_FACTOR : obj.originalMass;
+                const massText = `${currentMass.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} kg`;
+                
+                const btn = document.createElement('button');
+                btn.onclick = () => selectObject(obj.id);
+                btn.className = `text-left p-4 rounded-2xl transition-all border ${isSelected ? 'bg-white border-slate-300 shadow-xl ring-2 ring-slate-200 -translate-y-1' : 'bg-white/70 border-slate-100 hover:bg-white'}`;
+                
+                btn.innerHTML = `
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-3xl bg-slate-50 w-12 h-12 flex items-center justify-center rounded-xl shadow-inner">${obj.icon}</span>
+                        <div class="px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-widest ${obj.isMinimized ? 'bg-cyan-100 text-cyan-700' : 'bg-green-100 text-green-700'}">
+                            ${obj.isMinimized ? 'Reducido' : 'Original'}
+                        </div>
+                    </div>
+                    <h4 class="font-bold text-slate-800 text-sm truncate">${obj.name}</h4>
+                    <p class="text-[11px] text-slate-600 mono mt-1 font-bold">${massText}</p>
+                `;
+                grid.appendChild(btn);
+            });
+
+            const sel = objects.find(o => o.id === selectedId);
+            document.getElementById('focus-name').innerText = sel ? sel.name : '---';
+        }
+
+        function selectObject(id) {
+            selectedId = id;
+            renderObjects();
+        }
+
+        function handleAction(type) {
+            if (!isOn) return;
+            const obj = objects.find(o => o.id === selectedId);
+            if (!obj) return;
+
+            if (type === 'maximize' && obj.isMinimized) {
+                showModal('Aviso de Expansión', `Restaurando masa de <strong>${obj.name}</strong>.`, 'fa-triangle-exclamation', 'bg-amber-50', 'text-amber-500', 'bg-green-500', () => {
+                    obj.isMinimized = false;
+                    renderObjects();
+                    closeModal();
+                });
+            } else if (type === 'minimize' && !obj.isMinimized) {
+                obj.isMinimized = true;
+                renderObjects();
+            }
+        }
+
+        function toggleAddView(show) {
+            if (!isOn && show) return;
+            const view = document.getElementById('add-view');
+            view.classList.toggle('hidden', !show);
+            if (show) renderEmojiGrid();
+        }
+
+        function renderEmojiGrid() {
+            const grid = document.getElementById('emoji-grid');
+            grid.innerHTML = '';
+            EMOJI_LIBRARY.forEach(emoji => {
+                const btn = document.createElement('button');
+                btn.type = "button";
+                btn.className = `text-2xl p-2 rounded-xl transition-all ${currentIcon === emoji ? 'bg-slate-900 scale-110 shadow-lg text-white' : 'hover:bg-white'}`;
+                btn.innerText = emoji;
+                btn.onclick = () => { currentIcon = emoji; renderEmojiGrid(); };
+                grid.appendChild(btn);
+            });
+        }
+
+        function addObject() {
+            const name = document.getElementById('new-name').value;
+            const mass = document.getElementById('new-mass').value;
+            if (!name || !mass) return;
+
+            const newObj = {
+                id: Date.now(),
+                name: name,
+                isMinimized: false,
+                originalMass: parseFloat(mass),
+                icon: currentIcon
+            };
+
+            objects.unshift(newObj);
+            selectedId = newObj.id;
+            document.getElementById('new-name').value = '';
+            document.getElementById('new-mass').value = '';
+            toggleAddView(false);
+            renderObjects();
+        }
+
+        function confirmDelete() {
+            const obj = objects.find(o => o.id === selectedId);
+            if (!obj) return;
+
+            if (obj.isMinimized) {
+                showModal('Error de Sistema', 'No se pueden borrar objetos reducidos.', 'fa-info', 'bg-slate-50', 'text-slate-400', 'bg-slate-900', closeModal, 'Regresar');
+            } else {
+                showModal('Eliminar Objeto', '¿Deseas eliminar este registro?', 'fa-circle-exclamation', 'bg-red-50', 'text-red-500', 'bg-red-500', () => {
+                    objects = objects.filter(o => o.id !== selectedId);
+                    if (objects.length > 0) selectedId = objects[0].id;
+                    renderObjects();
+                    closeModal();
+                });
+            }
+        }
+
+        // MODAL HELPER
+        function showModal(title, desc, icon, iconBg, iconColor, btnBg, onConfirm, confirmText = 'Confirmar') {
+            const modal = document.getElementById('modal-confirm');
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-desc').innerHTML = desc;
+            
+            const iconEl = document.getElementById('modal-icon');
+            iconEl.className = `fa-solid ${icon} text-3xl ${iconColor}`;
+            document.getElementById('modal-icon-container').className = `w-16 h-16 ${iconBg} rounded-2xl flex items-center justify-center mb-5 mx-auto`;
+            
+            const primaryBtn = document.getElementById('modal-primary-btn');
+            primaryBtn.className = `w-full ${btnBg} text-white py-3.5 rounded-2xl font-bold text-xs shadow-lg`;
+            primaryBtn.innerText = confirmText;
+            primaryBtn.onclick = onConfirm;
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-confirm').classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>
